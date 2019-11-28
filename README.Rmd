@@ -1,42 +1,35 @@
-*Data vis of UK General Election 2019*
-================
-*Roger Beecham*
-28/11/2019
+---
+title: "_Data vis of UK General Election 2019_"
+author: "_Roger Beecham_"
+date: "28/11/2019"
+output: 
+   github_document
+---
 
-This repository contains code and details for a data vis of 2019 UK
-General Election. The encoding is based on [Lazaro
-Gamio](https://twitter.com/LazaroGamio) and Dan Keating’s excellent work
-[featured in Washington
-Post](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)
-analysing county-level voting outcomes for 2016 Presidential Election.
+This repository contains code and details for a data vis of 2019 UK General Election. The encoding is based on [Lazaro Gamio](https://twitter.com/LazaroGamio) and Dan Keating's excellent work [featured in Washington Post](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/) analysing county-level voting outcomes for 2016 Presidential Election. 
 
 The data in this repository (found in [data/](data/)) is assembled from:
 
-*Voting data*
+_Voting data_
 
-  - [Electoral Commision](https://www.electoralcommission.org.uk) :
-    constituency-level result data.
+* [Electoral Commision](https://www.electoralcommission.org.uk) : constituency-level result data.
 
-  - [YouGov](https://yougov.co.uk/topics/politics/articles-reports/2019/11/27/how-yougovs-2019-general-election-model-works)
-    : constituency-level vote share estimates based on surveys from
-    100,000 panellists and an MRP model. Methods by [Benjamin
-    Lauderdale](http://benjaminlauderdale.net/) and [Jack
-    Blumenau](https://www.jackblumenau.com/)
+* [YouGov](https://yougov.co.uk/topics/politics/articles-reports/2019/11/27/how-yougovs-2019-general-election-model-works) : constituency-level vote share estimates based on surveys from 100,000 panellists and an MRP model. Methods by [Benjamin Lauderdale](http://benjaminlauderdale.net/) and [Jack Blumenau](https://www.jackblumenau.com/)
 
-*Boundary data*
+_Boundary data_
 
-  - [ONS Open Geography Portal](http://geoportal.statistics.gov.uk) :
-    Constituency boundary data.
+* [ONS Open Geography Portal](http://geoportal.statistics.gov.uk) : Constituency boundary data.
 
------
+---
 
 ![](./figures/all_yg.png)![](./figures/con_lab_yg.png)![](./figures/con_lib_yg.png)![](./figures/lib_lab_yg.png)
 
------
+---
 
 ## Required Libraries
 
-``` r
+
+```{r, install_libraries, eval=FALSE}
 library(tidyverse)              # bundle of packages for data manipulation. 
 library(sf)                     # for working with geospatial data.
 
@@ -44,9 +37,9 @@ library(sf)                     # for working with geospatial data.
 theme_set(theme_void(base_family="Iosevka Light"))
 ```
 
-## Load data
+## Load data 
 
-``` r
+```{r, eval=FALSE}
 # Read in data from 2017 and 2015 from Electoral Commission.
 data <- read_csv("./data/data.csv")
 
@@ -146,11 +139,9 @@ data <- bind_rows(data_estimated, data)
 
 ## Calculate derived measures for plotting
 
-Calculate one-party shift and [Butler two party
-swing](https://en.wikipedia.org/wiki/Swing_\(United_Kingdom\)#Original_mathematical_calculation)
-for main parties for plotting.
+Calculate one-party shift and [Butler two party swing](https://en.wikipedia.org/wiki/Swing_(United_Kingdom)#Original_mathematical_calculation) for main parties for plotting.
 
-``` r
+```{r, eval=FALSE}
 data_plot <- data %>% group_by(ons_code, year) %>%
   mutate(
     total_votes=sum(valid_votes), 
@@ -210,11 +201,9 @@ data_plot <- data_plot %>%
 
 ## Colours
 
-Selecting colours is challenging – I’m borrowing from
-[Flourish’s](https://flourish.studio/2019/11/26/charts-for-the-uk-elections-2019/)
-colour set.
+Selecting colours is challenging -- I'm borrowing from [Flourish's](https://flourish.studio/2019/11/26/charts-for-the-uk-elections-2019/) colour set.
 
-``` r
+```{r, eval=FALSE}
 # Con :
 con <- "#0575c9"
 # Lab :
@@ -238,14 +227,12 @@ colours <- c(con, lab, lib_dem, snp, greens, plaid, other)
 names(colours) <- levels(data_plot$elected)
 ```
 
-## Use of *geom\_spoke()*
 
-To continuously vary line angle (as in [Washington Post
-piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)),
-I’m using `geom_spoke`. Couple of additional convenience functions are
-below.
+## Use of _geom_spoke()_
 
-``` r
+To continuously vary line angle (as in [Washington Post piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)), I'm using `geom_spoke`. Couple of additional convenience functions are below. 
+
+```{r, eval=FALSE}
 # Convert degrees to radians.
 get_radians <- function(degrees) {
   (degrees * pi) / (180)
@@ -268,9 +255,10 @@ PositionCenterSpoke <- ggplot2::ggproto('PositionCenterSpoke', ggplot2::Position
 )
 ```
 
-## Generate legend with *annotation\_custom()*
 
-``` r
+## Generate legend with _annotation_custom()_
+
+```{r, eval=FALSE}
 # Use of angle to encode swing.
 swing <-  ggplot()+
   geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363")+
@@ -315,9 +303,10 @@ legend <- ggplot()+
   ylim(0,6.25)
 ```
 
-## Generate map with *geom\_spoke()* and *geom\_sf()*
 
-``` r
+## Generate map with _geom_spoke()_ and _geom_sf()_
+
+```{r, eval=FALSE}
 # Only shift overall vote if the winning party sees an increase in vote-share
 max_shift <- max(data_plot$elected_shift)
 min_shift <- -max_shift
@@ -378,9 +367,9 @@ map <- gb +
   )
 ```
 
-## Generate summary of flips
+## Generate summary of flips 
 
-``` r
+```{r, eval=FALSE}
 flips_data <- data_plot %>% 
   filter(is_flipped) %>% 
   group_by(region_name, elected) %>% 
@@ -415,13 +404,11 @@ flips <- flips_data %>%
   theme(strip.text = element_blank())
 ```
 
-## Compose views and export
+## Compose views and export 
 
-View composition in `ggplot2` is not as easier and elegant as in
-[vega-lite](https://vega.github.io/vega-lite/), but I’m using
-`gridExtra::grid.arrange()` and some fiddly trial and error work.
+View composition in `ggplot2` is not as easier and elegant as in [vega-lite](https://vega.github.io/vega-lite/), but I'm using `gridExtra::grid.arrange()` and some fiddly trial and error work.
 
-``` r
+```{r, eval=FALSE}
 out <- gridExtra::grid.arrange(legend,flips,map,
                     widths = c(0.4, 0.6),
                     heights = c(0.25,0.75),
