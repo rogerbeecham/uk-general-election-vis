@@ -6,6 +6,8 @@ output:
    github_document
 ---
 
+## Context
+
 This repository contains code and details for a data vis of 2019 UK General Election. The encoding is based on [Lazaro Gamio](https://twitter.com/LazaroGamio) and Dan Keating's excellent work [featured in Washington Post](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/) analysing county-level voting outcomes for 2016 Presidential Election. 
 
 The data in this repository (found in [data/](data/)) is assembled from:

@@ -3,6 +3,8 @@
 *Roger Beecham*
 28/11/2019
 
+## Context
+
 This repository contains code and details for a data vis of 2019 UK
 General Election. The encoding is based on [Lazaro
 Gamio](https://twitter.com/LazaroGamio) and Dan Keating’s excellent work
