@@ -16,7 +16,7 @@ The data in this repository (found in [data/](data/)) is assembled from:
 
 *Voting data*
 
-  - [Electoral Commision](https://www.electoralcommission.org.uk) :
+  - [Electoral Commission](https://www.electoralcommission.org.uk) :
     constituency-level result data.
 
   - [YouGov](https://yougov.co.uk/topics/politics/articles-reports/2019/11/27/how-yougovs-2019-general-election-model-works)
@@ -39,7 +39,7 @@ The data in this repository (found in [data/](data/)) is assembled from:
 ## Required Libraries
 
 ``` r
-library(tidyverse)              # bundle of packages for data manipulation. 
+library(tidyverse)              # bundle of packages for data manipulation.
 library(sf)                     # for working with geospatial data.
 
 # theme_void makes view composition with annotate_custom and gridExtra easier.
@@ -55,11 +55,11 @@ data <- read_csv("./data/data.csv")
 # Check consistency in winning party names between 2017 and 2015.
 data %>% group_by(ons_code, year) %>%
   mutate(
-    total_votes=sum(valid_votes), 
-    first=max(valid_votes), 
-    vote_share=valid_votes/total_votes, 
+    total_votes=sum(valid_votes),
+    first=max(valid_votes),
+    vote_share=valid_votes/total_votes,
     is_first=if_else(valid_votes==first, 1, 0)
-    ) %>% 
+    ) %>%
   select(ons_code, constituency, party, valid_votes, vote_share, total_votes, is_first) %>%
   filter(is_first==1, year) %>% ungroup() %>% select(party, year) %>% unique %>% View
 
@@ -69,10 +69,10 @@ data %>% group_by(ons_code, year) %>%
 # Recode Scottish National Party to SNP
 # Recode UK Independence Party to UKIP
 data <- data %>% mutate(
-  party = case_when( 
+  party = case_when(
     party == "Speaker" ~ "Conservative", # speaker (Bercow) to Conservative
-    party == "Democratic Unionist Party" ~ "DUP", 
-    party == "Labour and Co-operative" ~ "Labour", 
+    party == "Democratic Unionist Party" ~ "DUP",
+    party == "Labour and Co-operative" ~ "Labour",
     party == "Scottish National Party" ~ "SNP",
     party == "UK Independence Party" ~ "UKIP",
     party == "Liberal Democrats" ~ "Liberal Democrat",
@@ -86,8 +86,8 @@ data <- data %>% mutate(
   select(-c(pano, surname, first_name))
 
 # Load in YouGov's MRP-based estimates for GB constituencies 2019.
-data_estimated <- read_csv("./data/party_constituency_vote_shares.csv") %>% 
-  select(-c(X1,i)) %>% 
+data_estimated <- read_csv("./data/party_constituency_vote_shares.csv") %>%
+  select(-c(X1,i)) %>%
   # Rename parties for consistency with 2017 data.
   rename("Conservative"="Con", "Labour"="Lab", "Liberal_Democrat" = "LD", "Plaid_Cymru" = "PC") %>%
   # Reshape dataset so it can be joined with Electoral Commission data.
@@ -97,41 +97,41 @@ data_estimated <- read_csv("./data/party_constituency_vote_shares.csv") %>%
   # Add a year column and rename code to ons_code.
   add_column(year=2019) %>% rename("ons_code"="code")
 
-# Load in outlines of consistuencies -- simplified using mapshapr.
+# Load in outlines of constituencies -- simplified using mapshapr.
 constituency_boundaries <- st_read("./data/constituency_boundaries.geojson", crs=27700)
 
-# Load in Region lookup.å
+# Load in Region lookup.
 region_lookup <- read_csv("./data/constituency_region_lookup.csv")
 
 # Check that winning parties in 2017 can be looked-up in winning parties for MRP data.
-winners_2017 <- data %>% 
+winners_2017 <- data %>%
   # Filter non-GB consituencies
   inner_join(region_lookup %>% select(ons_code=PCON17CD,region_name=EER17NM)) %>%
   filter(region_name!="Northern Ireland", year==2017) %>%
   group_by(ons_code) %>%
   mutate(
-    total_votes=sum(valid_votes), 
-    first=max(valid_votes), 
-    vote_share=valid_votes/total_votes, 
+    total_votes=sum(valid_votes),
+    first=max(valid_votes),
+    vote_share=valid_votes/total_votes,
     is_first=if_else(valid_votes==first, 1, 0)
-    ) %>% 
+    ) %>%
   select(ons_code, constituency, party, valid_votes, vote_share, total_votes, is_first) %>%
-  filter(is_first==1) %>% ungroup() %>% select(party) %>% unique 
+  filter(is_first==1) %>% ungroup() %>% select(party) %>% unique
 
 # Check that both match
 (winners_2017 %>% pull(party)) %in% (data_estimated %>% pull(party) %>% unique)
 
 # Check that winning parties in 2019 MRP data can be looked-up in winning parties 2017 data.
-winners_2019 <- data %>% 
+winners_2019 <- data %>%
   group_by(ons_code) %>%
   mutate(
-    total_votes=sum(valid_votes), 
-    first=max(valid_votes), 
+    total_votes=sum(valid_votes),
+    first=max(valid_votes),
     is_first=if_else(valid_votes==first, 1, 0)
-    ) %>% 
-  filter(is_first==1) %>% ungroup() %>% select(party) %>% unique 
+    ) %>%
+  filter(is_first==1) %>% ungroup() %>% select(party) %>% unique
 
-# Check that both match. 
+# Check that both match.
 # Note the Other category in the YouGov dataset.
 (winners_2019 %>% pull(party)) %in% (data %>% pull(party) %>% unique)
 
@@ -155,31 +155,31 @@ for main parties for plotting.
 ``` r
 data_plot <- data %>% group_by(ons_code, year) %>%
   mutate(
-    total_votes=sum(valid_votes), 
-    vote_share=valid_votes/total_votes, 
-    elected_share=max(vote_share), 
+    total_votes=sum(valid_votes),
+    vote_share=valid_votes/total_votes,
+    elected_share=max(vote_share),
     elected=if_else(vote_share==elected_share, party, "")) %>%  ungroup() %>%
   # Calculate one-party shift for party that was elected
   group_by(ons_code, party) %>%
   arrange(year, .by_group = TRUE) %>%
   mutate(
     elected_shift=if_else(elected==party, vote_share-lag(vote_share,1),0),
-    # Identify whether winning party is flipped. 
+    # Identify whether winning party is flipped.
     is_flipped=if_else(elected==party, !elected==lag(elected,1),NA)
-    ) %>% ungroup() %>% 
+    ) %>% ungroup() %>%
   # Make wide again so that each column is a party.
-  pivot_wider(names_from=party, values_from = vote_share) %>% 
+  pivot_wider(names_from=party, values_from = vote_share) %>%
   mutate_at(vars(Conservative:SNP), ~if_else(is.na(.x),0,.x)) %>%
-  group_by(ons_code, year, elected, is_flipped) %>% 
+  group_by(ons_code, year, elected, is_flipped) %>%
   # Store derived values for the elected parties in constituency.
-  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:SNP), ~max(.)) %>% ungroup () %>% 
+  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:SNP), ~max(.)) %>% ungroup () %>%
   # Filter so one row for each constituency-year.
-  filter(elected!="") %>% 
+  filter(elected!="") %>%
   # Calculate shift from 2017.
-  group_by(ons_code) %>%  
-  mutate_at(vars(Conservative:SNP), funs(shift=.-lag(.,1))) %>% 
-  filter(year==2019) %>% rename("elected_votes"="valid_votes") %>% 
-  # Calculate Butler two-party swing. 
+  group_by(ons_code) %>%
+  mutate_at(vars(Conservative:SNP), funs(shift=.-lag(.,1))) %>%
+  filter(year==2019) %>% rename("elected_votes"="valid_votes") %>%
+  # Calculate Butler two-party swing.
   mutate(
     swing_con_lab=0.5*(Conservative_shift-Labour_shift),
     swing_con_lib=0.5*(Conservative_shift-Liberal_Democrat_shift),
@@ -188,15 +188,15 @@ data_plot <- data %>% group_by(ons_code, year) %>%
 
 # There are six constituencies with ties.
 # We're interested here in emphasising change where it exists, so we'll select
-# as the *winning* vote-share that which involves a switch in party. 
-data_plot <- data_plot %>% 
-  group_by(ons_code) %>% 
+# as the *winning* vote-share that which involves a switch in party.
+data_plot <- data_plot %>%
+  group_by(ons_code) %>%
   mutate(
-    dup=n(), 
+    dup=n(),
     is_tie=if_else(dup>1,TRUE,FALSE)) %>% ungroup() %>%
   filter(!is_tie | (is_tie & is_flipped)) %>%
   select(-c(is_tie, dup))
-  
+
 # Join with boundary data.
 data_plot  <- constituency_boundaries %>% select(ons_code=pcon17cd, east=bng_e, north=bng_n, cons_name=pcon17nm) %>%
   inner_join(data_plot)
@@ -221,19 +221,19 @@ colour set.
 con <- "#0575c9"
 # Lab :
 lab <- "#ed1e0e"
-# Lib dem : 
+# Lib dem :
 lib_dem <- "#fe8300"
-# SNP : 
+# SNP :
 snp <- "#ebc31c"
-# Greens : 
+# Greens :
 greens <- "#78c31e"
-# plaid 
+# plaid
 plaid <- "#4e9f2f"
-# Other : 
+# Other :
 other <- "#f3a6b2"
 
 # Store as vector and recode plot data as factor for use in scale_colour_manual.
-data_plot <- data_plot %>% 
+data_plot <- data_plot %>%
   mutate(elected=fct_relevel(as_factor(elected), levels=c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Other"))
 )
 colours <- c(con, lab, lib_dem, snp, greens, plaid, other)
@@ -257,7 +257,7 @@ map_scale <- function(value, min1, max1, min2, max2) {
   return  (min2+(max2-min2)*((value-min1)/(max1-min1)))
 }
 
-# Position subclass for centered geom_spoke as per --
+# Position subclass for centred geom_spoke as per --
 # https://stackoverflow.com/questions/55474143/how-to-center-geom-spoke-around-their-origin
 position_center_spoke <- function() PositionCenterSpoke
 PositionCenterSpoke <- ggplot2::ggproto('PositionCenterSpoke', ggplot2::Position,
@@ -289,8 +289,8 @@ temp_dat <-tibble(
   elected=names(colours[1:7]),
   y=rev(1:length(colours[1:7])),
   x=rep(1,length(colours[1:7]))
-) 
-party <- temp_dat %>% 
+)
+party <- temp_dat %>%
   ggplot()+
   geom_spoke(aes(x=x, y=y,angle=get_radians(90), colour=elected),radius=0.6, size=1)+
   scale_colour_manual(values=colours)+
@@ -304,7 +304,7 @@ line <-  ggplot()+
   geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8)+
   xlim(-0.5,0.5)+
   ylim(-0.35,0.35)
-  
+
 legend <- ggplot()+
   geom_text(aes(label="Each constituency is a line",x=0, y=6), hjust="left", vjust="top", family="Iosevka Medium", size=4)+
   geom_text(aes(label="Colour hue -- winning party",x=0, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
@@ -325,12 +325,12 @@ max_shift <- max(data_plot$elected_shift)
 min_shift <- -max_shift
 # Calculate bounding boxes for use in annotation_custom().
 london_bbox <- st_bbox(data_plot %>% filter(region_name=="London"))
-london_width <- unname(london_bbox$xmax)-unname(london_bbox$xmin) 
-london_height <- unname(london_bbox$ymax)-unname(london_bbox$ymin) 
+london_width <- unname(london_bbox$xmax)-unname(london_bbox$xmin)
+london_height <- unname(london_bbox$ymax)-unname(london_bbox$ymin)
 london_aspect <- london_width/london_height
 uk_bbox <- st_bbox(data_plot)
-uk_width <- unname(uk_bbox$xmax)-unname(uk_bbox$xmin) 
-uk_height <- unname(uk_bbox$ymax)-unname(uk_bbox$ymin) 
+uk_width <- unname(uk_bbox$xmax)-unname(uk_bbox$xmin)
+uk_height <- unname(uk_bbox$ymax)-unname(uk_bbox$ymin)
 # GB map.
 gb <- data_plot %>%
   filter(region_name!="London") %>%
@@ -383,17 +383,17 @@ map <- gb +
 ## Generate summary of flips
 
 ``` r
-flips_data <- data_plot %>% 
-  filter(is_flipped) %>% 
-  group_by(region_name, elected) %>% 
+flips_data <- data_plot %>%
+  filter(is_flipped) %>%
+  group_by(region_name, elected) %>%
   mutate(
     number_flips=n(),
     flip_direction = if_else(elected %in% c("Conservative"),"Cons flipping to 'right'","Cons flipping to 'left'")
-  ) %>% ungroup() %>% 
-  group_by(flip_direction) %>% 
+  ) %>% ungroup() %>%
+  group_by(flip_direction) %>%
   # For constituencies ordered by flip_direction and regions with greatest number of flips
   # occuring first
-  arrange(flip_direction, desc(number_flips)) %>% mutate(row=row_number()) %>% ungroup() %>% 
+  arrange(flip_direction, desc(number_flips)) %>% mutate(row=row_number()) %>% ungroup() %>%
   mutate(facet_rows= case_when(row / 100 <1 ~ 1,row / 100 <2 ~ 2),
          max_row=max(row))
 
@@ -419,7 +419,7 @@ flips <- flips_data %>%
 
 ## Compose views and export
 
-View composition in `ggplot2` is not as easier and elegant as in
+View composition in `ggplot2` is not as easy and elegant as in
 [vega-lite](https://vega.github.io/vega-lite/), but I’m using
 `gridExtra::grid.arrange()` and some fiddly trial and error work.
 
