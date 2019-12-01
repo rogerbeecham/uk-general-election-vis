@@ -23,7 +23,7 @@ The data in this repository (found in [data/](data/)) is assembled from:
     : constituency-level vote share estimates based on surveys from
     100,000 panellists and an MRP model. Methods by [Benjamin
     Lauderdale](http://benjaminlauderdale.net/) and [Jack
-    Blumenau](https://www.jackblumenau.com/)
+    Blumenau](https://www.jackblumenau.com/).
 
 *Boundary data*
 
@@ -52,17 +52,7 @@ theme_set(theme_void(base_family="Iosevka Light"))
 # Read in data from 2017 and 2015 from Electoral Commission.
 data <- read_csv("./data/data.csv")
 
-# Check consistency in winning party names between 2017 and 2015.
-data %>% group_by(ons_code, year) %>%
-  mutate(
-    total_votes=sum(valid_votes),
-    first=max(valid_votes),
-    vote_share=valid_votes/total_votes,
-    is_first=if_else(valid_votes==first, 1, 0)
-    ) %>%
-  select(ons_code, constituency, party, valid_votes, vote_share, total_votes, is_first) %>%
-  filter(is_first==1, year) %>% ungroup() %>% select(party, year) %>% unique %>% View
-
+# From 2017, recode parties.
 # Recode speaker (Bercow) to Conservative
 # Recode Democratic Unionist Party to DUP
 # Recode Labour and Co-operative to Labour
@@ -112,10 +102,9 @@ winners_2017 <- data %>%
   mutate(
     total_votes=sum(valid_votes),
     first=max(valid_votes),
-    vote_share=valid_votes/total_votes,
     is_first=if_else(valid_votes==first, 1, 0)
     ) %>%
-  select(ons_code, constituency, party, valid_votes, vote_share, total_votes, is_first) %>%
+  select(ons_code, constituency, party, is_first) %>%
   filter(is_first==1) %>% ungroup() %>% select(party) %>% unique
 
 # Check that both match
@@ -244,7 +233,7 @@ names(colours) <- levels(data_plot$elected)
 
 To continuously vary line angle (as in [Washington Post
 piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)),
-I’m using `geom_spoke`. Couple of additional convenience functions are
+I’m using `geom_spoke()`. Couple of additional convenience functions are
 below.
 
 ``` r
@@ -275,9 +264,9 @@ PositionCenterSpoke <- ggplot2::ggproto('PositionCenterSpoke', ggplot2::Position
 ``` r
 # Use of angle to encode swing.
 swing <-  ggplot()+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363")+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(135)),radius=0.55, size=0.2,colour="#636363", linetype = "dashed")+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(45)),radius=0.55,size=0.2,colour="#636363",linetype = "dashed")+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363", lineend="round")+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(135)),radius=0.55, size=0.2,colour="#636363", linetype = "dashed", lineend="round")+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(45)),radius=0.55,size=0.2,colour="#636363",linetype = "dashed", lineend="round")+
   geom_text(aes(label="+17% to \n Con",x=.45, y=0), angle=45,hjust="right", family="Iosevka Light", size=2, colour="#636363")+
   geom_text(aes(label="+17% to \n Lab, Lib, Grn, SNP",x=-.45, y=0), angle=315,hjust="left", family="Iosevka Light", size=2, colour="#636363")+
   geom_curve(aes(x=-.04, y=.2, xend=-.3, yend=.08), size=0.3, curvature = 0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
@@ -292,7 +281,7 @@ temp_dat <-tibble(
 )
 party <- temp_dat %>%
   ggplot()+
-  geom_spoke(aes(x=x, y=y,angle=get_radians(90), colour=elected),radius=0.6, size=1)+
+  geom_spoke(aes(x=x, y=y,angle=get_radians(90), colour=elected),radius=0.6, size=1, lineend="round")+
   scale_colour_manual(values=colours)+
   geom_text(aes(label=elected,x=x+0.05, y=y+0.2),hjust="left",vjust="middle", family="Iosevka Light", size=3.5, colour="#636363")+
     guides(colour=FALSE)+
@@ -300,8 +289,8 @@ party <- temp_dat %>%
   ylim(1,8)
 # Use of thickness to flips.
 line <-  ggplot()+
-  geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2)+
-  geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8)+
+  geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, lineend="round")+
+  geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8, lineend="round")+
   xlim(-0.5,0.5)+
   ylim(-0.35,0.35)
 
@@ -309,7 +298,7 @@ legend <- ggplot()+
   geom_text(aes(label="Each constituency is a line",x=0, y=6), hjust="left", vjust="top", family="Iosevka Medium", size=4)+
   geom_text(aes(label="Colour hue -- winning party",x=0, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
   geom_text(aes(label="Thick line -- \n constituency flipped \n winning party \n from 2017",x=4.5, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
-  geom_text(aes(label="Line angle -- \n net % increase \n in winning party \n share from 2017 \n '|' if % - in share",x=4.5, y=2.5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  geom_text(aes(label="Line angle -- \n net % increase \n in winning party \n share from 2017 \n '|' if net % decrease \n in winning party share",x=4.5, y=2.5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
   annotation_custom(grob=ggplotGrob(swing),xmin=7,xmax=10,ymin=0,ymax=2.5)+
   annotation_custom(ggplotGrob(line),xmin=7,xmax=10,ymin=4.2,ymax=3.3)+
   annotation_custom(ggplotGrob(party),xmin=0,xmax=6,ymin=0,ymax=5)+
@@ -320,7 +309,7 @@ legend <- ggplot()+
 ## Generate map with *geom\_spoke()* and *geom\_sf()*
 
 ``` r
-# Only shift overall vote if the winning party sees an increase in vote-share
+# Only shift overall vote if the winning party sees an increase in vote-share.
 max_shift <- max(data_plot$elected_shift)
 min_shift <- -max_shift
 # Calculate bounding boxes for use in annotation_custom().
@@ -339,14 +328,14 @@ gb <- data_plot %>%
   coord_sf(crs=27700, datum=NA, xlim = c(unname(uk_bbox$xmin), unname(uk_bbox$xmax)+5*london_width), ylim = c(unname(uk_bbox$ymin), unname(uk_bbox$ymax)-0.22*uk_height))+
   # Flipped
   geom_spoke(data=.%>% filter(is_flipped, elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000, size=0.9, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000, size=0.9, position="center_spoke", lineend="round")+
   geom_spoke(data=. %>% filter(is_flipped, !elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000, size=0.9, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000, size=0.9, position="center_spoke", lineend="round")+
   # Not flipped
    geom_spoke(data=. %>% filter(!is_flipped, elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000, size=0.4, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000, size=0.3, position="center_spoke", lineend="round")+
   geom_spoke(data=. %>% filter(!is_flipped, !elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000, size=0.4, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000, size=0.3, position="center_spoke", lineend="round")+
   scale_colour_manual(values=colours)+
   scale_fill_manual(values=colours)+
     guides(colour=FALSE, fill=FALSE)
@@ -358,14 +347,14 @@ london <- data_plot %>%
   coord_sf(datum=NA)+
   # Flipped
   geom_spoke(data=.%>% filter(is_flipped, elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000/6, size=0.9, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000/6, size=0.9, position="center_spoke", lineend="round")+
   geom_spoke(data=.%>% filter(is_flipped, !elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000/6, size=0.9, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000/6, size=0.9, position="center_spoke", lineend="round")+
   # Not flipped
    geom_spoke(data=.%>% filter(!is_flipped, elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000/6, size=0.4, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=8000/6, size=0.3, position="center_spoke", lineend="round")+
   geom_spoke(data=.%>% filter(!is_flipped, !elected %in% c("Conservative")),
-     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000/6, size=0.4, position="center_spoke")+
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=8000/6, size=0.3, position="center_spoke", lineend="round")+
   scale_colour_manual(values=colours)+
   scale_fill_manual(values=colours)+
   guides(colour=FALSE, fill=FALSE)
@@ -385,15 +374,13 @@ map <- gb +
 ``` r
 flips_data <- data_plot %>%
   filter(is_flipped) %>%
+  mutate(flip_direction = if_else(elected %in% c("Conservative"),"Cons flipping to 'right'","Cons flipping to 'left'")) %>%
   group_by(region_name, elected) %>%
-  mutate(
-    number_flips=n(),
-    flip_direction = if_else(elected %in% c("Conservative"),"Cons flipping to 'right'","Cons flipping to 'left'")
-  ) %>% ungroup() %>%
+  mutate(number_flips=n()) %>% ungroup() %>%
   group_by(flip_direction) %>%
   # For constituencies ordered by flip_direction and regions with greatest number of flips
   # occuring first
-  arrange(flip_direction, desc(number_flips)) %>% mutate(row=row_number()) %>% ungroup() %>%
+  arrange(flip_direction, desc(number_flips), region_name) %>% mutate(row=row_number()) %>% ungroup() %>%
   mutate(facet_rows= case_when(row / 100 <1 ~ 1,row / 100 <2 ~ 2),
          max_row=max(row))
 
@@ -402,9 +389,9 @@ flips <- flips_data %>%
    geom_rect(aes(xmin=0.7, xmax=1.3, ymin=-row-0.5, ymax=-row+0.5, fill=elected),colour="#636363", size=0.1, alpha=0.2)+
   # Flipped
    geom_spoke(data=. %>% filter(is_flipped, elected %in% c("Conservative")),
-     aes(x=1, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=0.4, size=0.5, position="center_spoke")+
+     aes(x=1, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
     geom_spoke(data=. %>% filter(is_flipped==TRUE, !elected %in% c("Conservative")),
-       aes(x=1, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=0.4, size=0.5, position="center_spoke")+
+       aes(x=1, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
   geom_text(aes(x=1.5, y=-row, label=paste0(region_name," - ",cons_name)), hjust="left", size=3, family="Iosevka Light")+
  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'right'") %>% slice(1), aes(label=flip_direction), x=5, y=1, hjust="centre", family="Iosevka Light") +
   geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'left'") %>% slice(1), aes(label=flip_direction), x=5, y=1, hjust="centre", family="Iosevka Light") +
