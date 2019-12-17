@@ -6,7 +6,7 @@ output:
    github_document
 ---
 
-## Context
+## Notes
 
 This repository contains code and details for a data vis of 2019 UK General Election. The encoding is based on [Lazaro Gamio](https://twitter.com/LazaroGamio) and Dan Keating's excellent work [featured in Washington Post](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/) analysing county-level voting outcomes for 2016 Presidential Election.
 
@@ -18,6 +18,8 @@ _Voting data_
 
 * [YouGov](https://yougov.co.uk/topics/politics/articles-reports/2019/11/27/how-yougovs-2019-general-election-model-works) : constituency-level vote share estimates based on surveys from 100,000 panellists and an MRP model. Methods by [Benjamin Lauderdale](http://benjaminlauderdale.net/) and [Jack Blumenau](https://www.jackblumenau.com/).
 
+* [Alex Denvir](https://twitter.com/eldenvo) -- pulled together unverified results in detail (necessary for calculating vote share by party). Available as a GoogleSheet [here](https://drive.google.com/file/d/19Z1YbmmjzDqMl2rzrk0XTfNrbRJDAMtU/view)
+
 _Boundary data_
 
 * [ONS Open Geography Portal](http://geoportal.statistics.gov.uk) : Constituency boundary data.
@@ -25,9 +27,15 @@ _Boundary data_
 * [Scottish Data Zone boundary data](https://borders.ukdataservice.ac.uk/easy_download_data.html?data=Scotland_dz_2001)
 * [England & Wales LSOA boundary data](https://geoportal.statistics.gov.uk/datasets/lower-layer-super-output-areas-december-2011-generalised-clipped-boundaries-in-england-and-wales)
 
+_Deprivation data and constituency data_
+
+* [UK-wide deprivation estimates](https://bmjopen.bmj.com/content/6/11/e012750) : LSOA-level data (equivalents for Scotland and Northern Ireland) published in supplementary material.
+
+* [Commons Library](https://github.com/alasdairrae/wpc) : For constituency-level population estimates.
+
 ---
 
-![](./figures/all_yg.png)![](./figures/con_lab_yg.png)
+![](./figures/all_shift.png)![](./figures/all_size.png)![](./figures/con_lab.png)
 
 ---
 
@@ -73,8 +81,32 @@ data <- data %>% mutate(
 
 # Load in YouGov's MRP-based estimates for GB constituencies 2019.
 data_estimated <- read_csv("./data/party_constituency_vote_shares_dec.csv") %>%
-  #select(-c(X1,i)) %>%
+  rename("Conservative"="Con", "Labour"="Lab", "Liberal_Democrat" = "LD", "Plaid_Cymru" = "PC") %>%
+  # Reshape dataset so it can be joined with Electoral Commission data.
+  # Treating vote_share as counts is an odd formulation but necessary for later
+  # data processing activity.
+  pivot_longer(-c(code, constituency), names_to="party", values_to="valid_votes") %>%
+  # Add a year column and rename code to ons_code.
+  add_column(year=2019) %>% rename("ons_code"="code")
+
+# Load in unverified result data.
+data_2019 <- read_csv("./data/GE_2019_results.csv") %>%
   # Rename parties for consistency with 2017 data.
+  rename("Conservative"="con", "Labour"="lab", "Liberal_Democrat" = "lib", "Plaid_Cymru" = "plc", "Brexit_Party"="brx", "DUP"="dup", "Other"="oth", "SDLP"="sdl", "SNP"="snp", "Independent"="ind", "Speaker"="spk", "UKIP"="ukp", "UUP"="uup", "Sinn_Fein"="snf", "Green"="grn", "Alliance"="all") %>%
+  # Reshape dataset so it can be joined with Electoral Commission data.
+  # Treating vote_share as counts is an odd formulation but necessary for later
+  # data processing activity.
+  select(-c(electorate, turnout, winning_party, previous_party, gain, second_party, majority)) %>%
+  pivot_longer(-c(code, constituency), names_to="party", values_to="valid_votes") %>%
+  # Add a year column and rename code to ons_code.
+  add_column(year=2019) %>% rename("ons_code"="code") %>%
+  # Recode speaker to Labour.
+  filter(valid_votes!=0) %>%
+  mutate(party=if_else(party=="Speaker", "Labour", party))
+  
+
+# Load in YouGov's MRP-based estimates for GB constituencies 2019.
+data_estimated <- read_csv("./data/party_constituency_vote_shares_dec.csv") %>%
   rename("Conservative"="Con", "Labour"="Lab", "Liberal_Democrat" = "LD", "Plaid_Cymru" = "PC") %>%
   # Reshape dataset so it can be joined with Electoral Commission data.
   # Treating vote_share as counts is an odd formulation but necessary for later
@@ -91,9 +123,7 @@ region_lookup <- read_csv("./data/constituency_region_lookup.csv")
 
 # Check that winning parties in 2017 can be looked-up in winning parties for MRP data.
 winners_2017 <- data %>%
-  # Filter non-GB consituencies
   inner_join(region_lookup %>% select(ons_code=PCON17CD,region_name=EER17NM)) %>%
-  filter(region_name!="Northern Ireland", year==2017) %>%
   group_by(ons_code) %>%
   mutate(
     total_votes=sum(valid_votes),
@@ -104,10 +134,10 @@ winners_2017 <- data %>%
   filter(is_first==1) %>% ungroup() %>% select(party) %>% unique
 
 # Check that both match
-(winners_2017 %>% pull(party)) %in% (data_estimated %>% pull(party) %>% unique)
+(winners_2017 %>% pull(party)) %in% (data_2019 %>% pull(party) %>% unique)
 
-# Check that winning parties in 2019 MRP data can be looked-up in winning parties 2017 data.
-winners_2019 <- data %>%
+# Check that winning parties in 2019 data can be looked-up in winning parties 2017 data.
+winners_2019 <- data_2019 %>% 
   group_by(ons_code) %>%
   mutate(
     total_votes=sum(valid_votes),
@@ -122,13 +152,14 @@ winners_2019 <- data %>%
 
 # Recode the electoral commission data with Other category for consistency.
 # Also remove 2015 data and non-GB constituencies.
-data <- data %>% inner_join(region_lookup %>% select(ons_code=PCON17CD,region_name=EER17NM)) %>% filter(region_name!="Northern Ireland", year==2017) %>%
-  mutate(party=if_else(party %in% estimated_parties_names, party, "Other")) %>% select(-region_name) %>%
+elected_parties_names <- c("Conservative","Labour","Liberal_Democrat","Plaid_Cymru","Brexit_Party", "DUP", "Other", "SDLP", "SNP", "Independent", "Speaker", "UKIP", "UUP", "Sinn_Fein", "Green", "Alliance")
+data <- data %>% inner_join(region_lookup %>% select(ons_code=PCON17CD,region_name=EER17NM)) %>% filter(year==2017) %>%
+  mutate(party=if_else(party %in% elected_parties_names, party, "Other")) %>% select(-region_name) %>%
   group_by(ons_code, constituency, year, party) %>%
   summarise(valid_votes=sum(valid_votes))
 
-# Merge YouGov and electoral commision data
-data <- bind_rows(data_estimated, data)
+# Merge 2019 and electoral commision data
+data <- bind_rows(data_2019, data)
 
 # Northern Ireland boundaries
 ni_boundaries <- st_read("./data/boundaries/SOA2011_Esri_Shapefile_0/SOA2011.shp") %>% st_transform(crs=27700) %>% select(geo_code=SOA_CODE)
@@ -152,6 +183,10 @@ uk_deprivation_con <- uk_deprivation_spat %>% st_drop_geometry() %>%
   group_by(pcon17cd) %>%
   summarise(imd=mean(imd_adj)) %>% ungroup() %>% mutate(decile=ntile(-imd, 10)) 
 
+# Constituency-level population data.
+pop_constituency <- read_csv("./data/constituency_age.csv") %>% rename(pop=`All Ages`) %>%
+  group_by(PCON11CD) %>%
+  summarise(pop=first(pop))
 ```
 
 ## Calculate derived measures for plotting
@@ -175,15 +210,15 @@ data_plot <- data %>% group_by(ons_code, year) %>%
     ) %>% ungroup() %>%
   # Make wide again so that each column is a party.
   pivot_wider(names_from=party, values_from = vote_share) %>%
-  mutate_at(vars(Conservative:SNP), ~if_else(is.na(.x),0,.x)) %>%
+  mutate_at(vars(Conservative:Plaid_Cymru), ~if_else(is.na(.x),0,.x)) %>%
   group_by(ons_code, year, elected, is_flipped) %>%
   # Store derived values for the elected parties in constituency.
-  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:SNP), ~max(.)) %>% ungroup () %>%
+  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:Plaid_Cymru), ~max(.)) %>% ungroup () %>%
   # Filter so one row for each constituency-year.
   filter(elected!="") %>% 
   # Calculate shift from 2017.
   group_by(ons_code) %>%
-  mutate_at(vars(Conservative:SNP), funs(shift=.-lag(.,1))) %>%
+  mutate_at(vars(Conservative:Plaid_Cymru), funs(shift=.-lag(.,1))) %>%
   mutate(elected_2017=lag(elected,1)) %>%
   filter(year==2019) %>% rename("elected_votes"="valid_votes") %>%
   # Calculate Butler two-party swing.
@@ -192,17 +227,6 @@ data_plot <- data %>% group_by(ons_code, year) %>%
     swing_con_lib=0.5*(Conservative_shift-Liberal_Democrat_shift),
     swing_lib_lab=0.5*(Liberal_Democrat_shift-Labour_shift)
   ) 
-
-# There are six constituencies with ties.
-# We're interested here in emphasising change where it exists, so we'll select
-# as the *winning* vote-share that which involves a switch in party.
-data_plot <- data_plot %>%
-  group_by(ons_code) %>%
-  mutate(
-    dup=n(),
-    is_tie=if_else(dup>1,TRUE,FALSE)) %>% ungroup() %>%
-  filter(!is_tie | (is_tie & is_flipped)) %>%
-  select(-c(is_tie, dup))
 
 # Join with boundary data.
 data_plot  <- constituency_boundaries %>% select(ons_code=pcon17cd, east=bng_e, north=bng_n, cons_name=pcon17nm) %>%
@@ -249,14 +273,22 @@ snp <- "#ebc31c"
 greens <- "#78c31e"
 # plaid
 plaid <- "#4e9f2f"
+# sinn fein
+sinn_fein <- rgb(10, 98, 64, max=255)
+# dup 
+dup <- rgb(190, 26, 64, max=255)
 # Other :
-other <- "#f3a6b2"
+other <- "#bdbdbd"
+
+elected_parties_colours <- c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Sinn_Fein", "DUP")
+data_plot <- data_plot %>% mutate(elected=if_else(elected %in% elected_parties_colours, elected, "Other"))
 
 # Store as vector and recode plot data as factor for use in scale_colour_manual.
 data_plot <- data_plot %>%
-  mutate(elected=fct_relevel(as_factor(elected), levels=c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Other"))
+  mutate(
+  elected=fct_relevel(as_factor(elected), levels=c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Sinn_Fein", "DUP", "Other"))
 )
-colours <- c(con, lab, lib_dem, snp, greens, plaid, other)
+colours <- c(con, lab, lib_dem, snp, greens, plaid, sinn_fein, dup, other)
 names(colours) <- levels(data_plot$elected)
 ```
 
@@ -297,17 +329,17 @@ swing <-  ggplot()+
   geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363", lineend="round")+
   geom_spoke(aes(x=0, y=-.35,angle=get_radians(135)),radius=0.55, size=0.2,colour="#636363", linetype = "dashed", lineend="round")+
   geom_spoke(aes(x=0, y=-.35,angle=get_radians(45)),radius=0.55,size=0.2,colour="#636363",linetype = "dashed", lineend="round")+
-  geom_text(aes(label="+26% to \n Con",x=.45, y=0), angle=45,hjust="right", family="Iosevka Light", size=2, colour="#636363")+
-  geom_text(aes(label="+26% to \n Lab, Lib, Grn, SNP",x=-.45, y=0), angle=315,hjust="left", family="Iosevka Light", size=2, colour="#636363")+
+  geom_text(aes(label="+36% to \n Con",x=.45, y=0), angle=45,hjust="right", family="Iosevka Light", size=2, colour="#636363")+
+  geom_text(aes(label="+36% to \n Lab, Lib, Grn, SNP",x=-.45, y=0), angle=315,hjust="left", family="Iosevka Light", size=2, colour="#636363")+
   geom_curve(aes(x=-.04, y=.2, xend=-.3, yend=.08), size=0.3, curvature = 0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
   geom_curve(aes(x=.04, y=.2, xend=.3, yend=.08), size=0.3, curvature = -0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
   xlim(-0.5,0.5)+
   ylim(-0.35,0.35)
 # Use of colour to encode party.
 temp_dat <-tibble(
-  elected=names(colours[1:7]),
-  y=rev(1:length(colours[1:7])),
-  x=rep(1,length(colours[1:7]))
+  elected=names(colours[1:9]),
+  y=rev(1:length(colours[1:9])),
+  x=rep(1,length(colours[1:9]))
 )
 party <- temp_dat %>%
   ggplot()+
@@ -316,7 +348,7 @@ party <- temp_dat %>%
   geom_text(aes(label=elected,x=x+0.05, y=y+0.2),hjust="left",vjust="middle", family="Iosevka Light", size=3.5, colour="#636363")+
     guides(colour=FALSE)+
   xlim(1,2)+
-  ylim(1,8)
+  ylim(1,10)
 # Use of thickness to flips.
 line <-  ggplot()+
   geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, lineend="round")+
@@ -417,7 +449,6 @@ flips_data <- data_plot %>%
   mutate(number_flips=n()) %>% ungroup() %>%
   group_by(flip_direction) %>%
   # For constituencies ordered by flip_direction and regions with greatest number of flips
-  # occuring first
   arrange(flip_direction, desc(number_flips), region_name) %>% mutate(row=row_number()) %>% ungroup() %>%
   mutate(facet_rows= case_when(row / 100 <1 ~ 1,row / 100 <2 ~ 2),
          max_row=max(row))
@@ -454,7 +485,7 @@ flips <- flips_data %>%
 ```{r, eval=FALSE}
 counts_by_party <- data_plot %>% st_drop_geometry() %>% select(elected, elected_2017, is_flipped, cons_name) %>% 
   pivot_longer(-c(is_flipped, cons_name), names_to="year", values_to="party_name") %>% 
-  mutate(year=if_else(year=="elected", 2019,2017), is_flipped=if_else(year==2017,FALSE, is_flipped)) %>%
+  mutate(year=if_else(year=="elected", 2019,2017), is_flipped=if_else(year==2017,FALSE, is_flipped), party_name=if_else(party_name=="Independent", "Other", party_name)) %>%
   group_by(year, party_name) %>%
   mutate(num_elected=n()) %>% ungroup() %>% group_by(year) %>%
   arrange(desc(num_elected), is_flipped) %>% 
@@ -484,7 +515,7 @@ data_plot <- data_plot %>%
 
 flipped_colours = c(rgb(216, 230, 244, max=255), rgb(6,117,201, max=255))
 
-# Bars -- Con flips compared to overall Con on deprivation
+# Bars -- Con flips compared to overall Con on deprivation.
 flipped_by_decile <- data_plot %>% 
   mutate(is_flipped=if_else(is_flipped, "Flipped Conservative", "Already Conservative")) %>% 
   ggplot()+
@@ -502,7 +533,6 @@ flipped_by_decile <- data_plot %>%
     legend.text = element_text(size=6),
     title = element_text(size=8)
   )
-
 ```
 
 ## Compose views and export
@@ -515,7 +545,159 @@ out <- gridExtra::grid.arrange(legend,counts_by_party, flips,map,
                     heights = c(0.25,0.03, 0.047,0.7),
                     layout_matrix = rbind(c(1,4),c(NA,4),c(2,4) ,c(3,4))
 )
-ggsave("./figures/all_yg_compare.png",plot = out, width=40, height=30.15, units="cm")
+ggsave("./figures/all_shift.png",plot = out, width=40, height=30.15, units="cm")
 ```
 
-![](./figures/all_yg.png)
+![](./figures/all_shift.png)
+
+## Generate triangle with _geom_segment()_
+
+```{r, eval=FALSE}
+# Vary width (votes cast) and height (margin in net votes) of triangle.
+triangle <-  ggplot()+
+  geom_segment(aes(x=-.4, xend=0, y=-.35, yend=0.35), size=0.2, colour="#636363", lineend="round")+
+  geom_segment(aes(x=.4, xend=0, y=-.35, yend=0.35), size=0.2, colour="#636363", lineend="round")+
+  geom_segment(aes(x=0, y=-.32, xend=0, yend=.32), size=0.1, arrow=arrow(type="closed", ends="both", length = unit(.05, "inches")), linetype = "dashed", colour="#636363")+
+  geom_segment(aes(x=-.34, y=-.35, xend=.34, yend=-.35), size=0.1, arrow=arrow(type="closed", ends="both", length = unit(.05, "inches")), linetype = "dashed", colour="#636363")+
+  geom_text(aes(label="Height is \npop density",x=0, y=-.1),hjust="centre", family="Iosevka Light", size=2.5, colour="#636363")+
+  geom_text(aes(label="Width is % share of vote",x=0, y=-.45),hjust="centre", family="Iosevka Light", size=2.5, colour="#636363")+
+  xlim(-0.5,0.5)+
+  ylim(-0.5,0.35)
+# Use of colour to encode party.
+temp_dat <-tibble(
+  elected=names(colours[1:9]),
+  y=rev(1:length(colours[1:9])),
+  x=rep(1,length(colours[1:9]))
+)
+party <- temp_dat %>%
+  ggplot()+
+  geom_segment(aes(x=x-.03, xend=x, y=y-.08, yend=y+.4, colour=elected), size=0.6, lineend="round")+
+  geom_segment(aes(x=x+.03, xend=x, y=y-.08, yend=y+.4, colour=elected), size=0.6, lineend="round")+
+  scale_colour_manual(values=colours)+
+  geom_text(aes(label=elected,x=x+0.05, y=y+0.2),hjust="left",vjust="middle", family="Iosevka Light", size=3.5, colour="#636363")+
+    guides(colour=FALSE)+
+  xlim(0.95,2)+
+  ylim(0.7,10)
+# Use of thickness to flips.
+line <-  ggplot()+
+  geom_segment(aes(x=-0.3-.15, xend=-0.3, y=-.35, yend=.2), size=0.2)+
+  geom_segment(aes(x=-0.3+.15, xend=-0.3, y=-.35, yend=.2), size=0.2)+
+  geom_segment(aes(x=0.35-.15, xend=0.35, y=-.35, yend=.2), size=0.6)+
+  geom_segment(aes(x=0.35+.15, xend=0.35, y=-.35, yend=.2), size=0.6)+
+  xlim(-0.6,0.7)+
+  ylim(-0.35,0.35)
+
+legend <- ggplot()+
+  geom_text(aes(label="Each constituency is a triangle",x=0, y=6), hjust="left", vjust="top", family="Iosevka Medium", size=4)+
+  geom_text(aes(label="Colour hue -- winning party",x=0, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  geom_text(aes(label="Thick line -- \n constituency won \n in landslide \n (60% +)",x=4.5, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  geom_text(aes(label="Width -- \n % share of vote \n in winning party \nHeight -- \n pop density \n of constituency",x=4.5, y=2.5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  annotation_custom(grob=ggplotGrob(triangle),xmin=7,xmax=10,ymin=0,ymax=2.5)+
+  annotation_custom(ggplotGrob(line),xmin=7,xmax=10,ymin=4.2,ymax=3.3)+
+  annotation_custom(ggplotGrob(party),xmin=0,xmax=6,ymin=0,ymax=5)+
+  xlim(0,10)+
+  ylim(0,6.25)
+```
+
+
+
+## Generate map with _geom_segment()_ and _geom_sf()_
+
+```{r, eval=FALSE}
+# Add population density variable.
+data_plot <- data_plot %>% 
+  # Add areas.
+  mutate(area=data_plot %>% st_area() %>% units::drop_units() ) %>%
+  # Add population sizes.
+  left_join(pop_constituency, by=c("ons_code"="PCON11CD")) %>%
+  mutate(pop_density=pop/area)
+# Identify landslide constituencies
+data_plot <- data_plot %>% 
+  mutate(is_landslide=elected_share>.6, pop_density=(pop/area)^1.8)
+# Min/max for scaling -- data values
+min_density <- min(data_plot$pop_density)
+max_density <- max(data_plot$pop_density)
+min_share <- min(data_plot$elected_share)
+max_share <- max(data_plot$elected_share)
+# Min/max for scaling -- geog values
+min_height <- 3000
+max_height <- 3000*50
+min_width <- 1500
+max_width <- 1500*5
+
+# Calculate bounding boxes for use in annotation_custom().
+london_bbox <- st_bbox(data_plot %>% filter(region_name=="London"))
+london_width <- unname(london_bbox$xmax)-unname(london_bbox$xmin)
+london_height <- unname(london_bbox$ymax)-unname(london_bbox$ymin)
+london_aspect <- london_width/london_height
+uk_bbox <- st_bbox(data_plot)
+uk_width <- unname(uk_bbox$xmax)-unname(uk_bbox$xmin)
+uk_height <- unname(uk_bbox$ymax)-unname(uk_bbox$ymin)
+# GB map.
+gb <- data_plot %>%
+  filter(region_name!="London") %>%
+  mutate(
+    width=map_scale(elected_share, min_share, max_share, min_width, max_width),
+    height=map_scale(pop_density, min_density, max_density, min_height, max_height)
+  ) %>% 
+  ggplot()+
+  geom_sf(aes(fill=elected), colour="#636363", alpha=0.2, size=0.01)+
+  coord_sf(crs=27700, datum=NA, xlim = c(unname(uk_bbox$xmin), unname(uk_bbox$xmax)+5*london_width), ylim = c(unname(uk_bbox$ymin), unname(uk_bbox$ymax)-0.22*uk_height))+
+  # Landslide
+  geom_segment(data=.%>% filter(is_landslide),
+     aes(x=east-width, xend=east, y=north, yend=north+height, colour=elected), size=0.8, alpha=0.8, lineend="round")+
+  geom_segment(data=.%>% filter(is_landslide),
+     aes(x=east+width, xend=east, y=north, yend=north+height, colour=elected), size=0.8, alpha=0.8, lineend="round")+
+  # Not landslide
+   geom_segment(data=.%>% filter(!is_landslide),
+     aes(x=east-width, xend=east, y=north, yend=north+height, colour=elected), size=0.3, alpha=0.8, lineend="round")+
+  geom_segment(data=.%>% filter(!is_landslide),
+     aes(x=east+width, xend=east, y=north, yend=north+height, colour=elected), size=0.3, alpha=0.8, lineend="round")+
+  scale_colour_manual(values=colours)+
+  scale_fill_manual(values=colours)+
+    guides(colour=FALSE, fill=FALSE)
+
+london <- data_plot %>%
+  filter(region_name=="London") %>%
+  mutate(
+    width=map_scale(elected_share, min_share, max_share, min_width, max_width)/6,
+    height=map_scale(pop_density, min_density, max_density, min_height, max_height)/6
+  ) %>% 
+  ggplot()+
+  geom_sf(aes(fill=elected), colour="#636363", alpha=0.2, size=0.01)+
+  coord_sf(datum=NA)+
+  # Landslide
+  geom_segment(data=.%>% filter(is_landslide),
+     aes(x=east-width, xend=east, y=north, yend=north+height, colour=elected), size=0.8, alpha=0.8, lineend="round")+
+  geom_segment(data=.%>% filter(is_landslide),
+     aes(x=east+width, xend=east, y=north, yend=north+height, colour=elected), size=0.8, alpha=0.8, lineend="round")+
+  # Not landslide
+   geom_segment(data=.%>% filter(!is_landslide),
+     aes(x=east-width, xend=east, y=north, yend=north+height, colour=elected), size=0.3, alpha=0.8, lineend="round")+
+  geom_segment(data=.%>% filter(!is_landslide),
+     aes(x=east+width, xend=east, y=north, yend=north+height, colour=elected), size=0.3, alpha=0.8, lineend="round")+
+  scale_colour_manual(values=colours)+
+  scale_fill_manual(values=colours)+
+  guides(colour=FALSE, fill=FALSE)
+
+map <- gb +
+  annotation_custom(
+       grob=ggplotGrob(london),
+       xmin=unname(uk_bbox$xmax) + 1*london_width,
+       xmax=unname(uk_bbox$xmax) + 6*london_width,
+       ymin=unname(uk_bbox$ymin) - 1*london_height,
+       ymax=unname(uk_bbox$ymin) + 6*london_height
+   ) 
+```
+
+## Compose views and export
+
+```{r, eval=FALSE}
+out <- gridExtra::grid.arrange(legend,map,
+                    widths = c(0.4, 0.6),
+                    heights = c(0.25,0.03, 0.047,0.7),
+                    layout_matrix = rbind(c(1,2),c(NA,2),c(NA,2) ,c(NA,2))
+)
+ggsave("./figures/all_size.png",plot = out, width=40, height=30.15, units="cm")
+```
+![](./figures/all_size.png)
