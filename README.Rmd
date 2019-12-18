@@ -94,8 +94,6 @@ data_2019 <- read_csv("./data/GE_2019_results.csv") %>%
   # Rename parties for consistency with 2017 data.
   rename("Conservative"="con", "Labour"="lab", "Liberal_Democrat" = "lib", "Plaid_Cymru" = "plc", "Brexit_Party"="brx", "DUP"="dup", "Other"="oth", "SDLP"="sdl", "SNP"="snp", "Independent"="ind", "Speaker"="spk", "UKIP"="ukp", "UUP"="uup", "Sinn_Fein"="snf", "Green"="grn", "Alliance"="all") %>%
   # Reshape dataset so it can be joined with Electoral Commission data.
-  # Treating vote_share as counts is an odd formulation but necessary for later
-  # data processing activity.
   select(-c(electorate, turnout, winning_party, previous_party, gain, second_party, majority)) %>%
   pivot_longer(-c(code, constituency), names_to="party", values_to="valid_votes") %>%
   # Add a year column and rename code to ons_code.
@@ -103,17 +101,6 @@ data_2019 <- read_csv("./data/GE_2019_results.csv") %>%
   # Recode speaker to Labour.
   filter(valid_votes!=0) %>%
   mutate(party=if_else(party=="Speaker", "Labour", party))
-  
-
-# Load in YouGov's MRP-based estimates for GB constituencies 2019.
-data_estimated <- read_csv("./data/party_constituency_vote_shares_dec.csv") %>%
-  rename("Conservative"="Con", "Labour"="Lab", "Liberal_Democrat" = "LD", "Plaid_Cymru" = "PC") %>%
-  # Reshape dataset so it can be joined with Electoral Commission data.
-  # Treating vote_share as counts is an odd formulation but necessary for later
-  # data processing activity.
-  pivot_longer(-c(code, constituency), names_to="party", values_to="valid_votes") %>%
-  # Add a year column and rename code to ons_code.
-  add_column(year=2019) %>% rename("ons_code"="code")
 
 # Load in outlines of constituencies -- simplified using mapshapr.
 constituency_boundaries <- st_read("./data/constituency_boundaries.geojson", crs=27700)
@@ -147,7 +134,6 @@ winners_2019 <- data_2019 %>%
   filter(is_first==1) %>% ungroup() %>% select(party) %>% unique
 
 # Check that both match.
-# Note the Other category in the YouGov dataset.
 (winners_2019 %>% pull(party)) %in% (data %>% pull(party) %>% unique)
 
 # Recode the electoral commission data with Other category for consistency.
@@ -161,22 +147,26 @@ data <- data %>% inner_join(region_lookup %>% select(ons_code=PCON17CD,region_na
 # Merge 2019 and electoral commision data
 data <- bind_rows(data_2019, data)
 
-# Northern Ireland boundaries
+# Load LSOA boundary data for EW, NI and Scot -- for approximating deprivation to Constituency-level.
 ni_boundaries <- st_read("./data/boundaries/SOA2011_Esri_Shapefile_0/SOA2011.shp") %>% st_transform(crs=27700) %>% select(geo_code=SOA_CODE)
 scot_boundaries <- st_read("./data/boundaries/Scotland_dz_2001/scotland_dz_2001.shp") %>% st_transform(crs=27700) %>% select(geo_code=zonecode)
 e_w_boundaries <- st_read("./data/boundaries/Lower_Layer_Super_Output_Areas_December_2011_Generalised_Clipped__Boundaries_in_England_and_Wales/Lower_Layer_Super_Output_Areas_December_2011_Generalised_Clipped__Boundaries_in_England_and_Wales.shp") %>% st_transform(crs=27700) %>% select(geo_code=lsoa11cd)
-
+# Join NI, Scot and EW.
 lsoa_cons <- rbind(
   ni_boundaries %>% mutate(geo_code=as.character(geo_code)), 
   scot_boundaries %>% mutate(geo_code=as.character(geo_code)), 
   e_w_boundaries %>% mutate(geo_code=as.character(geo_code))
   )
-
+# Load LSOA-level deprivation data.
 uk_deprivation <- read_delim("https://data.bris.ac.uk/datasets/1ef3q32gybk001v77c1ifmty7x/uk_imd_scores_data.txt", delim="\t")
-
+# Join on boundary data.
 uk_deprivation_spat <- inner_join(lsoa_cons, uk_deprivation, by=c("geo_code"="area_code"))
+# Allocate LSOAs to contituencies -- nothing sophisticated here
+# (not weighting LSOAs according to area proportion in constituency)
 uk_deprivation_spat <- st_join(uk_deprivation_spat, constituency_boundaries)
-# https://researchbriefings.parliament.uk/ResearchBriefing/Summary/CBP-7327 -- need to get population data for weighted average
+# Ideally should weight according to popylation size. 
+# E.g. : https://researchbriefings.parliament.uk/ResearchBriefing/Summary/CBP-7327
+# Population data -- to be collected.
 uk_deprivation_con <- uk_deprivation_spat %>% st_drop_geometry() %>%
   group_by(geo_code) %>% 
   mutate(weight=1, imd_adj=uk_imd_england_score*weight) %>% ungroup() %>% 
@@ -281,9 +271,9 @@ dup <- rgb(190, 26, 64, max=255)
 other <- "#bdbdbd"
 
 elected_parties_colours <- c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Sinn_Fein", "DUP")
+# Recode elected paty as Other if doesn't have a colour.
 data_plot <- data_plot %>% mutate(elected=if_else(elected %in% elected_parties_colours, elected, "Other"))
-
-# Store as vector and recode plot data as factor for use in scale_colour_manual.
+# Store as vector and recode elected variable as factor for use in scale_colour_manual.
 data_plot <- data_plot %>%
   mutate(
   elected=fct_relevel(as_factor(elected), levels=c("Conservative","Labour","Liberal_Democrat","SNP", "Green", "Plaid_Cymru", "Sinn_Fein", "DUP", "Other"))
