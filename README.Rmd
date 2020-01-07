@@ -35,7 +35,7 @@ _Deprivation data and constituency data_
 
 ---
 
-[](./figures/all_size.png)![](./figures/con_lab.png)
+![](./figures/all_size.png)![](./figures/con_lab.png)
 
 ---
 

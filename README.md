@@ -53,7 +53,7 @@ The data in this repository (found in [data/](data/)) is assembled from:
 
 -----
 
-[](./figures/all_size.png)![](./figures/con_lab.png)
+![](./figures/all_size.png)![](./figures/con_lab.png)
 
 -----
 
