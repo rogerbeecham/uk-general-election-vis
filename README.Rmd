@@ -1,7 +1,7 @@
 ---
 title: "_Data vis of UK General Election 2019_"
 author: "_Roger Beecham_"
-date: "07/01/2020"
+date: "28/11/2019"
 output:
    github_document
 ---
@@ -35,7 +35,7 @@ _Deprivation data and constituency data_
 
 ---
 
-![](./figures/all_size.png)![](./figures/con_lab.png)
+![](./figures/all_shift.png)![](./figures/all_size.png)![](./figures/con_lab.png)
 
 ---
 
@@ -201,10 +201,9 @@ data_plot <- data %>% group_by(ons_code, year) %>%
   # Make wide again so that each column is a party.
   pivot_wider(names_from=party, values_from = vote_share) %>%
   mutate_at(vars(Conservative:Plaid_Cymru), ~if_else(is.na(.x),0,.x)) %>%
-  mutate(is_flipped=as.integer(is_flipped), is_flipped=if_else(is.na(is_flipped), as.integer(-1),is_flipped)) %>%
-  group_by(ons_code, year) %>% # elected, is_flipped
+  group_by(ons_code, year, elected, is_flipped) %>%
   # Store derived values for the elected parties in constituency.
-  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:Plaid_Cymru, elected, is_flipped), ~max(.)) %>% ungroup () %>%
+  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:Plaid_Cymru), ~max(.)) %>% ungroup () %>%
   # Filter so one row for each constituency-year.
   filter(elected!="") %>% 
   # Calculate shift from 2017.
@@ -216,11 +215,7 @@ data_plot <- data %>% group_by(ons_code, year) %>%
   mutate(
     swing_con_lab=0.5*(Conservative_shift-Labour_shift),
     swing_con_lib=0.5*(Conservative_shift-Liberal_Democrat_shift),
-    swing_lib_lab=0.5*(Liberal_Democrat_shift-Labour_shift),
-    # Recast is_flipped as boolean
-    is_flipped=is_flipped>0,
-    # Recode Chorley (uncontested seat) to 0.
-    swing_con_lab=if_else(ons_code=="E14000637",0,swing_con_lab)
+    swing_lib_lab=0.5*(Liberal_Democrat_shift-Labour_shift)
   ) 
 
 # Join with boundary data.
@@ -287,6 +282,7 @@ colours <- c(con, lab, lib_dem, snp, greens, plaid, sinn_fein, dup, other)
 names(colours) <- levels(data_plot$elected)
 ```
 
+
 ## Use of _geom_spoke()_
 
 To continuously vary line angle (as in [Washington Post piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)), I'm using `geom_spoke()`. Couple of additional convenience functions are below.
@@ -315,54 +311,68 @@ PositionCenterSpoke <- ggplot2::ggproto('PositionCenterSpoke', ggplot2::Position
 ```
 
 
-## Show flipped constituencies by deprivation declile
+## Generate legend with _annotation_custom()_
 
 ```{r, eval=FALSE}
-# Join constituency deprivation data.
-data_plot <- data_plot %>%
-  left_join(uk_deprivation_con, by=c("ons_code"="pcon17cd"))
-
-flipped_colours = c(rgb(216, 230, 244, max=255), rgb(6,117,201, max=255))
-
-# Bars -- Con flips compared to overall Con on deprivation
-flipped_by_decile <- data_plot %>% 
-  mutate(is_flipped=factor(if_else(is_flipped, "Conservative Gain", "Conservative Hold"), levels=c("Conservative Hold","Conservative Gain"))) %>% 
+# Use of angle to encode swing.
+swing <-  ggplot()+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363", lineend="round")+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(135)),radius=0.55, size=0.2,colour="#636363", linetype = "dashed", lineend="round")+
+  geom_spoke(aes(x=0, y=-.35,angle=get_radians(45)),radius=0.55,size=0.2,colour="#636363",linetype = "dashed", lineend="round")+
+  geom_text(aes(label="+36% to \n Con",x=.45, y=0), angle=45,hjust="right", family="Iosevka Light", size=2, colour="#636363")+
+  geom_text(aes(label="+36% to \n Lab, Lib, Grn, SNP",x=-.45, y=0), angle=315,hjust="left", family="Iosevka Light", size=2, colour="#636363")+
+  geom_curve(aes(x=-.04, y=.2, xend=-.3, yend=.08), size=0.3, curvature = 0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
+  geom_curve(aes(x=.04, y=.2, xend=.3, yend=.08), size=0.3, curvature = -0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
+  xlim(-0.5,0.5)+
+  ylim(-0.35,0.35)
+# Use of colour to encode party.
+temp_dat <-tibble(
+  elected=names(colours[1:9]),
+  y=rev(1:length(colours[1:9])),
+  x=rep(1,length(colours[1:9]))
+)
+party <- temp_dat %>%
   ggplot()+
-  geom_bar(data=. %>% filter(elected=="Conservative"), aes(decile, fill=is_flipped), colour="#636363", size=0.1, width=0.8 )+
-  #stat_heaph(data=. %>% filter(elected=="Conservative"), aes(decile, fill=is_flipped))+
-  geom_text(data=. %>% slice(1), aes(label="most deprived \nconstituencies", x=0.7, y=-4), hjust="left", vjust="top", size=2.5, family="Iosevka Light")+
-  geom_text(data=. %>% slice(1), aes(label="least deprived \nconstituencies", x=10.3, y=-4), hjust="right", vjust="top", size=2.5, family="Iosevka Light")+
-  scale_fill_manual(values=flipped_colours)+
-  ylim(-15,60)+
-  labs(subtitle="Deprivation decile for constituencies")+
-  theme(
-    legend.title=element_blank(),
-    legend.position = c(0.05, 0.95),
-    legend.justification = c("left", "top"),
-    legend.key.size = unit(0.3, "cm"),
-    legend.text = element_text(size=6),
-    title = element_text(size=8)
-  )
+  geom_spoke(aes(x=x, y=y,angle=get_radians(90), colour=elected),radius=0.6, size=1, lineend="round")+
+  scale_colour_manual(values=colours)+
+  geom_text(aes(label=elected,x=x+0.05, y=y+0.2),hjust="left",vjust="middle", family="Iosevka Light", size=3.5, colour="#636363")+
+    guides(colour=FALSE)+
+  xlim(1,2)+
+  ylim(1,10)
+# Use of thickness to flips.
+line <-  ggplot()+
+  geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, lineend="round")+
+  geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8, lineend="round")+
+  xlim(-0.5,0.5)+
+  ylim(-0.35,0.35)
+
+legend <- ggplot()+
+  geom_text(aes(label="Each constituency is a line",x=0, y=6), hjust="left", vjust="top", family="Iosevka Medium", size=4)+
+  geom_text(aes(label="Colour hue -- winning party",x=0, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  geom_text(aes(label="Thick line -- \n constituency flipped \n winning party \n from 2017",x=4.5, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  geom_text(aes(label="Line angle -- \n net % increase \n in winning party \n share from 2017 \n '|' if net % decrease \n in winning party share",x=4.5, y=2.5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
+  annotation_custom(grob=ggplotGrob(swing),xmin=7,xmax=10,ymin=0,ymax=2.5)+
+  annotation_custom(ggplotGrob(line),xmin=7,xmax=10,ymin=4.2,ymax=3.3)+
+  annotation_custom(ggplotGrob(party),xmin=0,xmax=6,ymin=0,ymax=5)+
+  xlim(0,10)+
+  ylim(0,6.25)
 ```
 
 
 ## Generate map with _geom_spoke()_ and _geom_sf()_
 
 ```{r, eval=FALSE}
-max_shift <- max(abs(data_plot$swing_con_lab))
+# Only shift overall vote if the winning party sees an increase in vote-share.
+max_shift <- max(data_plot$elected_shift)
 min_shift <- -max_shift
 # Calculate bounding boxes for use in annotation_custom().
 london_bbox <- st_bbox(data_plot %>% filter(region_name=="London"))
-london_width <- unname(london_bbox$xmax)-unname(london_bbox$xmin) 
-london_height <- unname(london_bbox$ymax)-unname(london_bbox$ymin) 
+london_width <- unname(london_bbox$xmax)-unname(london_bbox$xmin)
+london_height <- unname(london_bbox$ymax)-unname(london_bbox$ymin)
 london_aspect <- london_width/london_height
 uk_bbox <- st_bbox(data_plot)
-uk_width <- unname(uk_bbox$xmax)-unname(uk_bbox$xmin) 
-uk_height <- unname(uk_bbox$ymax)-unname(uk_bbox$ymin) 
-
-# Update colours to make all not con/lab grey
-colours <- c(con, lab, "#bdbdbd", "#bdbdbd", "#bdbdbd", "#bdbdbd", "#bdbdbd","#bdbdbd","#bdbdbd")
-names(colours) <- levels(data_plot$elected)
+uk_width <- unname(uk_bbox$xmax)-unname(uk_bbox$xmin)
+uk_height <- unname(uk_bbox$ymax)-unname(uk_bbox$ymin)
 # GB map.
 gb <- data_plot %>%
   filter(region_name!="London") %>%
@@ -370,11 +380,15 @@ gb <- data_plot %>%
   geom_sf(aes(fill=elected), colour="#636363", alpha=0.2, size=0.01)+
   coord_sf(crs=27700, datum=NA, xlim = c(unname(uk_bbox$xmin), unname(uk_bbox$xmax)+5*london_width), ylim = c(unname(uk_bbox$ymin), unname(uk_bbox$ymax)-0.22*uk_height))+
   # Flipped
-   geom_spoke(data=.%>% filter(is_flipped),
-      aes(x=east, y=north, angle=get_radians(map_scale(swing_con_lab,min_shift,max_shift,135,45)), colour=elected), radius=7000, size=0.9, position="center_spoke", lineend="round")+
+  geom_spoke(data=.%>% filter(is_flipped, elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=7000, size=0.9, position="center_spoke", lineend="round")+
+  geom_spoke(data=. %>% filter(is_flipped, !elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=7000, size=0.9, position="center_spoke", lineend="round")+
   # Not flipped
-   geom_spoke(data=. %>% filter(!is_flipped),
-     aes(x=east, y=north, angle=get_radians(map_scale(swing_con_lab,min_shift,max_shift,135,45)), colour=elected), radius=7000, size=0.3, position="center_spoke", lineend="round")+
+   geom_spoke(data=. %>% filter(!is_flipped, elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=7000, size=0.3, position="center_spoke", lineend="round")+
+  geom_spoke(data=. %>% filter(!is_flipped, !elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=7000, size=0.3, position="center_spoke", lineend="round")+
   scale_colour_manual(values=colours)+
   scale_fill_manual(values=colours)+
     guides(colour=FALSE, fill=FALSE)
@@ -385,23 +399,27 @@ london <- data_plot %>%
   geom_sf(aes(fill=elected), colour="#636363", alpha=0.2, size=0.01)+
   coord_sf(datum=NA)+
   # Flipped
-  geom_spoke(data=.%>% filter(is_flipped),
-     aes(x=east, y=north, angle=get_radians(map_scale(swing_con_lab,min_shift,max_shift,135,45)), colour=elected), radius=7000/5, size=0.9, position="center_spoke", lineend="round")+
+  geom_spoke(data=.%>% filter(is_flipped, elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=7000/6, size=0.9, position="center_spoke", lineend="round")+
+  geom_spoke(data=.%>% filter(is_flipped, !elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=7000/6, size=0.9, position="center_spoke", lineend="round")+
   # Not flipped
-   geom_spoke(data=.%>% filter(!is_flipped),
-     aes(x=east, y=north, angle=get_radians(map_scale(swing_con_lab,min_shift,max_shift,135,45)), colour=elected), radius=7000/5, size=0.3, position="center_spoke", lineend="round")+
+   geom_spoke(data=.%>% filter(!is_flipped, elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=7000/6, size=0.3, position="center_spoke", lineend="round")+
+  geom_spoke(data=.%>% filter(!is_flipped, !elected %in% c("Conservative")),
+     aes(x=east, y=north, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=7000/6, size=0.3, position="center_spoke", lineend="round")+
   scale_colour_manual(values=colours)+
   scale_fill_manual(values=colours)+
   guides(colour=FALSE, fill=FALSE)
 
 map <- gb +
- annotation_custom(
-      grob=ggplotGrob(london),
-      xmin=unname(uk_bbox$xmax +1*london_width),
-      xmax=unname(uk_bbox$xmax) + 6*london_width,
-      ymin=unname(uk_bbox$ymin) +1*london_height,
-      ymax=unname(uk_bbox$ymin) + 6*london_height
-  )+
+  annotation_custom(
+       grob=ggplotGrob(london),
+       xmin=unname(uk_bbox$xmax) + 1*london_width,
+       xmax=unname(uk_bbox$xmax) + 6*london_width,
+       ymin=unname(uk_bbox$ymin) - 1*london_height,
+       ymax=unname(uk_bbox$ymin) + 6*london_height
+   ) +
   annotation_custom(
        grob=ggplotGrob(flipped_by_decile),
        xmin=unname(uk_bbox$xmax) + 1*london_width,
@@ -411,116 +429,53 @@ map <- gb +
    ) 
 ```
 
-
-## Generate legend with _annotation_custom()_
-
-```{r, eval=FALSE}
-# Use of angle to encode swing.
-swing <-  ggplot()+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, colour="#636363", lineend="round")+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(135)),radius=0.55, size=0.2,colour="#636363", linetype = "dashed", lineend="round")+
-  geom_spoke(aes(x=0, y=-.35,angle=get_radians(45)),radius=0.55,size=0.2,colour="#636363",linetype = "dashed", lineend="round")+
-  geom_text(aes(label="+18% to \n Con",x=.45, y=0), angle=45,hjust="right", family="Iosevka Light", size=2, colour="#636363")+
-  geom_text(aes(label="+18% to \n Lab",x=-.45, y=0), angle=315,hjust="left", family="Iosevka Light", size=2, colour="#636363")+
-  geom_curve(aes(x=-.04, y=.2, xend=-.3, yend=.08), size=0.3, curvature = 0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
-  geom_curve(aes(x=.04, y=.2, xend=.3, yend=.08), size=0.3, curvature = -0.2, arrow=arrow(type="closed", length = unit(.03, "inches")), colour="#636363")+
-  xlim(-0.5,0.5)+
-  ylim(-0.35,0.35)+
-  coord_equal()
-# Use of colour to encode party.
-temp_dat <-tibble(
-  elected=names(colours[c(1,2,9)]),
-  y=rev(1:length(colours[c(1,2,9)])),
-  x=rep(1,length(colours[c(1,2,9)]))
-) 
-
-# Use of thickness to flips.
-line <-  ggplot()+
-  geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, lineend="round")+
-  geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8, lineend="round")+
-  xlim(-0.5,0.5)+
-  ylim(-0.35,0.35)
-
-party <- temp_dat %>%
-  ggplot()+
-  geom_spoke(aes(x=x, y=y,angle=get_radians(90), colour=elected),radius=0.6, size=1, lineend="round")+
-  scale_colour_manual(values=colours)+
-  geom_text(aes(label=elected,x=x+0.05, y=y+0.2),hjust="left",vjust="middle", family="Iosevka Light", size=3.5, colour="#636363")+
-    guides(colour=FALSE)+
-  xlim(1,2)+
-  ylim(-4,4)
-# Use of thickness to flips.
-line <-  ggplot()+
-  geom_spoke(aes(x=-0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.2, lineend="round")+
-  geom_spoke(aes(x=0.2, y=-.35,angle=get_radians(90)),radius=0.55, size=0.8, lineend="round")+
-  xlim(-0.5,0.5)+
-  ylim(-0.35,0.35)
-  
-legend <- ggplot()+
-  geom_text(aes(label="Each constituency is a line -- Butler Con-Lab swing",x=0, y=6), hjust="left", vjust="top", family="Iosevka Medium", size=4)+
-  geom_text(aes(label="Colour hue -- winning party",x=0, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
-  geom_text(aes(label="Thick line -- \n constituency flipped \n winning party \n from 2017",x=4.5, y=5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
-  geom_text(aes(label="Line angle -- \n Butler % swing \n in vote share \n from 2017 -- \n Con-Lab",x=4.5, y=2.5), hjust="left", vjust="top", family="Iosevka Light", size=3.5)+
-  annotation_custom(grob=ggplotGrob(swing),xmin=7,xmax=10,ymin=0,ymax=2.5)+
-  annotation_custom(ggplotGrob(line),xmin=7,xmax=10,ymin=4.2,ymax=3.3)+
-  annotation_custom(ggplotGrob(party),xmin=0,xmax=6,ymin=0,ymax=5)+
-  xlim(0,10)+
-  ylim(0,6.25)
-```
-
-
-## Generate summary of flips 
+## Generate summary of flips
 
 ```{r, eval=FALSE}
-flips_data <- data_plot %>% 
-  filter(is_flipped, elected == "Conservative" | elected == "Labour") %>% 
-  mutate(flip_direction=if_else(elected %in% c("Conservative"),"Conservative Gains","Labour Gains"),
-         flip_direction=factor(flip_direction, levels=c("Labour Gains", "Conservative Gains"))) %>%
-  group_by(region_name, elected) %>% 
-  mutate(number_flips=n()) %>% ungroup() %>% 
-  group_by(flip_direction) %>% 
+flips_data <- data_plot %>%
+  filter(is_flipped) %>%
+  mutate(flip_direction = if_else(elected %in% c("Conservative"),"Cons flipping to 'right'","Cons flipping to 'left'")) %>%
+  group_by(region_name, elected) %>%
+  mutate(number_flips=n()) %>% ungroup() %>%
+  group_by(flip_direction) %>%
   # For constituencies ordered by flip_direction and regions with greatest number of flips
-  # occuring first
-  arrange(flip_direction, desc(number_flips), region_name) %>% mutate(row=row_number()) %>% ungroup() %>% 
+  arrange(flip_direction, desc(number_flips), region_name) %>% mutate(row=row_number()) %>% ungroup() %>%
   mutate(facet_rows= case_when(row / 100 <1 ~ 1,row / 100 <2 ~ 2),
          max_row=max(row))
 
 flips <- flips_data %>%
   ggplot()+
    # Elected 2017
-  geom_rect(aes(xmin=1, xmax=3, ymin=-row-0.5, ymax=-row+0.5, fill=elected_2017),colour="#ffffff", size=0.3, alpha=0.3)+
+  geom_rect(aes(xmin=0.7, xmax=1.3, ymin=-row-0.5, ymax=-row+0.5, fill=elected_2017),colour="#ffffff", size=0.3, alpha=0.3)+
    # Elected 2019 
-  geom_rect(aes(xmin=3.5, xmax=5.5, ymin=-row-0.5, ymax=-row+0.5, fill=elected),colour="#ffffff", size=0.3, alpha=0.3)+
+  geom_rect(aes(xmin=1.4, xmax=2.0, ymin=-row-0.5, ymax=-row+0.5, fill=elected),colour="#ffffff", size=0.3, alpha=0.3)+
   # Flipped
-    geom_spoke(data=. %>% filter(is_flipped, elected %in% c("Conservative")),
-      aes(x=4.5, y=-row, angle=get_radians(map_scale(pmax(swing_con_lab,0),min_shift,max_shift,135,45)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
-     geom_spoke(data=. %>% filter(is_flipped==TRUE, !elected %in% c("Conservative")),
-        aes(x=4.5, y=-row, angle=get_radians(map_scale(pmin(swing_con_lab,0),min_shift,max_shift,135,45)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
-  geom_text(aes(x=6, y=-row, label=paste0(region_name_short," - ",cons_name)), hjust="left", size=2.5, family="Iosevka Light")+
-  geom_text(data=. %>% filter(flip_direction=="Conservative Gains") %>% slice(1), aes(label=flip_direction), x=12.5, y=3, hjust="centre", family="Iosevka Light") +
-  geom_text(data=. %>% filter(flip_direction=="Labour Gains") %>% slice(1), aes(label=flip_direction), x=12.5, y=3, hjust="centre", family="Iosevka Light") +
-  geom_text(data=. %>% filter(flip_direction=="Conservative Gains") %>% slice(1), label="2017", x=2, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
-  geom_text(data=. %>% filter(flip_direction=="Conservative Gains") %>% slice(1), label="2019", x=4.5, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
-   geom_text(data=. %>% filter(flip_direction=="Labour Gains") %>% slice(1), label="2017", x=2, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
-  geom_text(data=. %>% filter(flip_direction=="Labour Gains") %>% slice(1), label="2019", x=4.5, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
-  xlim(0,25)+ 
+   geom_spoke(data=. %>% filter(is_flipped, elected %in% c("Conservative")),
+     aes(x=1.7, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,135,45)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
+    geom_spoke(data=. %>% filter(is_flipped==TRUE, !elected %in% c("Conservative")),
+       aes(x=1.7, y=-row, angle=get_radians(map_scale(pmax(elected_shift,0),min_shift,max_shift,45,135)), colour=elected), radius=0.4, size=0.5, position="center_spoke", lineend="round")+
+  geom_text(aes(x=2.1, y=-row, label=paste0(region_name_short," - ",cons_name)), hjust="left", size=2.5, family="Iosevka Light")+
+  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'right'") %>% slice(1), aes(label=flip_direction), x=5, y=3, hjust="centre", family="Iosevka Light") +
+  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'left'") %>% slice(1), aes(label=flip_direction), x=5, y=3, hjust="centre", family="Iosevka Light") +
+  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'right'") %>% slice(1), label="2017", x=1.0, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
+  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'right'") %>% slice(1), label="2019", x=1.7, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
+   geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'left'") %>% slice(1), label="2017", x=1.0, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
+  geom_text(data=. %>% filter(flip_direction=="Cons flipping to 'left'") %>% slice(1), label="2019", x=1.7, y=0, hjust="left", size=2.5, angle=90, family="Iosevka Light") +
+  xlim(0,10)+
   ylim(-(max(flips_data$max_row)+1), 4)+
-  coord_equal()+
   facet_wrap(~flip_direction)+
    scale_colour_manual(values=colours)+
   scale_fill_manual(values=colours)+
   guides(colour=FALSE, fill=FALSE)+
   theme(strip.text = element_blank())
-```
+````
 
 ## Generate vote by constituency plot
 
 ```{r, eval=FALSE}
 counts_by_party <- data_plot %>% st_drop_geometry() %>% select(elected, elected_2017, is_flipped, cons_name) %>% 
   pivot_longer(-c(is_flipped, cons_name), names_to="year", values_to="party_name") %>% 
-  mutate(year=if_else(year=="elected", 2019,2017), is_flipped=if_else(year==2017,FALSE, is_flipped),
-         #party_name=if_else(party_name=="Independent", "Other", party_name)) %>%
-         party_name=if_else(party_name %in% c("Conservative", "Labour"), party_name, "Other")) %>%
+  mutate(year=if_else(year=="elected", 2019,2017), is_flipped=if_else(year==2017,FALSE, is_flipped), party_name=if_else(party_name=="Independent", "Other", party_name)) %>%
   group_by(year, party_name) %>%
   mutate(num_elected=n()) %>% ungroup() %>% group_by(year) %>%
   arrange(desc(num_elected), is_flipped) %>% 
@@ -540,6 +495,36 @@ counts_by_party <- data_plot %>% st_drop_geometry() %>% select(elected, elected_
   theme(strip.text = element_blank())
 ```
 
+
+## Show flipped constituencies by deprivation declile
+
+```{r, eval=FALSE}
+# Join constituency deprivation data.
+data_plot <- data_plot %>%
+  left_join(uk_deprivation_con, by=c("ons_code"="pcon17cd"))
+
+flipped_colours = c(rgb(216, 230, 244, max=255), rgb(6,117,201, max=255))
+
+# Bars -- Con flips compared to overall Con on deprivation.
+flipped_by_decile <- data_plot %>% 
+  mutate(is_flipped=if_else(is_flipped, "Flipped Conservative", "Already Conservative")) %>% 
+  ggplot()+
+  geom_bar(data=. %>% filter(elected=="Conservative"), aes(decile, fill=is_flipped), colour="#636363", size=0.1, width=0.8 )+
+  geom_text(data=. %>% slice(1), aes(label="most deprived \nconstituencies", x=0.7, y=-4), hjust="left", vjust="top", size=2.5, family="Iosevka Light")+
+  geom_text(data=. %>% slice(1), aes(label="least deprived \nconstituencies", x=10.3, y=-4), hjust="right", vjust="top", size=2.5, family="Iosevka Light")+
+  scale_fill_manual(values=flipped_colours)+
+  ylim(-15,60)+
+  labs(subtitle="Deprivation decile for constituencies")+
+  theme(
+    legend.title=element_blank(),
+    legend.position = c(0.05, 0.95),
+    legend.justification = c("left", "top"),
+    legend.key.size = unit(0.3, "cm"),
+    legend.text = element_text(size=6),
+    title = element_text(size=8)
+  )
+```
+
 ## Compose views and export
 
 View composition in `ggplot2` is not as easy and elegant as in [vega-lite](https://vega.github.io/vega-lite/), but I'm using `gridExtra::grid.arrange()` and some fiddly trial and error work.
@@ -550,18 +535,14 @@ out <- gridExtra::grid.arrange(legend,counts_by_party, flips,map,
                     heights = c(0.25,0.03, 0.047,0.7),
                     layout_matrix = rbind(c(1,4),c(NA,4),c(2,4) ,c(3,4))
 )
-ggsave("./figures/con_lab.png",plot = out, width=40, height=30.15, units="cm")
+ggsave("./figures/all_shift.png",plot = out, width=40, height=30.15, units="cm")
 ```
 
-![](./figures/con_lab.png)
+![](./figures/all_shift.png)
 
 ## Generate triangle with _geom_segment()_
 
 ```{r, eval=FALSE}
-# Reset colours.
-colours <- c(con, lab, lib_dem, snp, greens, plaid, sinn_fein, dup, other)
-names(colours) <- levels(data_plot$elected)
-
 # Vary width (votes cast) and height (margin in net votes) of triangle.
 triangle <-  ggplot()+
   geom_segment(aes(x=-.4, xend=0, y=-.35, yend=0.35), size=0.2, colour="#636363", lineend="round")+
