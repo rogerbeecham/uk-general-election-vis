@@ -81,9 +81,10 @@ data_plot <- data %>% group_by(ons_code, year) %>%
   # Make wide again so that each column is a party.
   pivot_wider(names_from=party, values_from = vote_share) %>%
   mutate_at(vars(Conservative:Plaid_Cymru), ~if_else(is.na(.x),0,.x)) %>%
-  group_by(ons_code, year, elected, is_flipped) %>%
+  mutate(is_flipped=as.integer(is_flipped), is_flipped=if_else(is.na(is_flipped), as.integer(-1),is_flipped)) %>%
+  group_by(ons_code, year) %>% # elected, is_flipped
   # Store derived values for the elected parties in constituency.
-  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:Plaid_Cymru), ~max(.)) %>% ungroup () %>%
+  summarise_at(vars(valid_votes, total_votes, elected_share, elected_shift, Conservative:Plaid_Cymru, elected, is_flipped), ~max(.)) %>% ungroup () %>%
   # Filter so one row for each constituency-year.
   filter(elected!="") %>% 
   # Calculate shift from 2017.
@@ -95,7 +96,11 @@ data_plot <- data %>% group_by(ons_code, year) %>%
   mutate(
     swing_con_lab=0.5*(Conservative_shift-Labour_shift),
     swing_con_lib=0.5*(Conservative_shift-Liberal_Democrat_shift),
-    swing_lib_lab=0.5*(Liberal_Democrat_shift-Labour_shift)
+    swing_lib_lab=0.5*(Liberal_Democrat_shift-Labour_shift),
+    # Recast is_flipped as boolean
+    is_flipped=is_flipped>0,
+    # Recode Chorley (uncontested seat) to 0.
+    swing_con_lab=if_else(ons_code=="E14000637",0,swing_con_lab)
   ) 
 
 # Join with boundary data.
