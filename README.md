@@ -457,11 +457,11 @@ map <- gb +
   )+
   annotation_custom(
        grob=ggplotGrob(flipped_by_decile),
-       xmax=unname(uk_bbox$xmin) + 2*london_width,
-       xmin=unname(uk_bbox$xmin) - 2.5*london_width,
-       ymin=unname(uk_bbox$ymin) + 1*london_height,
-       ymax=unname(uk_bbox$ymin) + 0.2*uk_height
-   )
+       xmin=unname(uk_bbox$xmax) + 1*london_width,
+       xmax=unname(uk_bbox$xmax) + 5.8*london_width,
+       ymin=unname(uk_bbox$ymin) + 0.3*uk_height,
+       ymax=unname(uk_bbox$ymin) + 0.45*uk_height
+   ) 
 ```
 
 ### Compose views and export
@@ -480,6 +480,12 @@ ggsave("./figures/con_lab_swing.png",plot = out, width=50, height=30.15, units="
 ```
 
 ## Generate graphic displaying voting outcomes by population density
+
+-----
+
+![](./figures/all_size.png)
+
+-----
 
 Also in Lazio Gamio and Dan Keating’s [Washington Post
 piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/),
