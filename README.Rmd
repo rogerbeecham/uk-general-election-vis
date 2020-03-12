@@ -140,9 +140,8 @@ data_plot <- data_plot %>%
 
 ## Colours
 
-<div style="width:80%">
-![](./figures/colours.png)
-</div>
+<img src="./figures/colours.png" width="80%">
+
 
 Selecting colours is challenging -- I'm borrowing from [Flourish's](https://flourish.studio/2019/11/26/charts-for-the-uk-elections-2019/) colour set. 
 
@@ -163,9 +162,7 @@ names(colours) <- levels(data_plot$elected)
 
 ## Use of _geom_spoke()_ for line orientation
 
-<div style="width:50%">
-![](./figures/orientation.png)
-</div>
+<img src="./figures/orientation.png" width="50%">
 
 To continuously vary line angle (as in [Washington Post piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)), I'm using `geom_spoke()`. Couple of additional convenience functions are below.
 
@@ -205,9 +202,8 @@ names(colours) <- levels(data_plot$elected)
 
 ### Generate legend 
 
-<div style="width:60%">
-![](./figures/legend.png)
-</div>
+<img src="./figures/legend.png" width="60%">
+
 
 Here I create separate grobs for diferent aspects of the legend. These are then organised using `_annotation_custom()_`.
 
@@ -263,9 +259,7 @@ legend <- ggplot()+
 
 ### Generate summary of flips 
 
-<div style="width:50%">
-![](./figures/flips.png)
-</div>
+<img src="./figures/flips.png" width="50%">
 
 Since we're mostly concerned with the "relignment" of Con-Lab voting, Conservative gains and Lab gains are also listed separately.
 
@@ -373,9 +367,7 @@ counts_by_party <- data_plot %>% st_drop_geometry() %>% select(elected, elected_
 
 ### Generate main graphic : map of swings 
 
-<div style="width:60%">
-![](./figures/hex_morph.gif)
-</div>
+<img src="./figures/hex_morph.gif" width="60%">
 
 The main graphic is generated with `geom_spoke()`,  `geom_sf()` -- and again arranged/laid out with `annotation_custom`.
 
