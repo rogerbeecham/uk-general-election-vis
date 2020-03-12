@@ -1,5 +1,4 @@
 *Data vis of UK General Election 2019*
-[![DOI](https://zenodo.org/badge/158826255.svg)](https://zenodo.org/badge/latestdoi/158826255)
 ================
 *Roger Beecham*
 04/03/2020
@@ -88,6 +87,20 @@ source("code/load_data.R")
 A key measure used to characterise shifting voting preference in the
 graphic is [Butler two-party
 Swing](https://en.wikipedia.org/wiki/Swing_\(United_Kingdom\)#Original_mathematical_calculation).
+The measure requires a little interpretation: it represents the average
+change in share of the vote won by two parties contesting successive
+elections. So in this case this means mostly adding the rise in the
+Conservative’s vote share and fall in Labour’s vote share between 2017
+and 2019 and dividing by two. However, a swing to the Conservatives from
+Labour could actually manifest in three ways:
+
+  - an increase in Conservative vote share and a decrease in Labour vote
+    share
+  - an increase in both Conservative and Labour vote share, but with the
+    Conservative increase outstripping that of Labour’s
+  - a decrease in both Conservative and Labour vote share, but with the
+    Conservative decline being less severe than that of Labour’s
+
 Below we generate a new dataframe (`data_plot`) storing this derived
 measure, join this to the boundary data and make a few edits for
 plotting purposes (for example abbreviating Region names).
@@ -162,6 +175,12 @@ data_plot <- data_plot %>%
 
 ## Colours
 
+<div style="width:80%">
+
+![](./figures/colours.png)
+
+</div>
+
 Selecting colours is challenging – I’m borrowing from
 [Flourish’s](https://flourish.studio/2019/11/26/charts-for-the-uk-elections-2019/)
 colour set.
@@ -181,7 +200,13 @@ colours <- c(con, lab, lib_dem, snp, greens, plaid, sinn_fein, dup, other)
 names(colours) <- levels(data_plot$elected)
 ```
 
-## Use of *geom\_spoke()*
+## Use of *geom\_spoke()* for line orientation
+
+<div style="width:50%">
+
+![](./figures/orientation.png)
+
+</div>
 
 To continuously vary line angle (as in [Washington Post
 piece](https://www.washingtonpost.com/graphics/politics/2016-election/election-results-from-coast-to-coast/)),
@@ -210,6 +235,10 @@ PositionCenterSpoke <- ggplot2::ggproto('PositionCenterSpoke', ggplot2::Position
 )
 ```
 
+`geom_spoke()` is then parameterised (via `aes()`) with the geographic
+centres of the electoral constituencies and orientation in radians with
+min and max value mapped to 10 o’clock and 2 o’clock respectively.
+
 ## Generate map of Butler two-party Con-Lab Swing
 
 The main graphic plots Butler two-party Con-Lab Swing. Here we
@@ -223,6 +252,12 @@ names(colours) <- levels(data_plot$elected)
 ```
 
 ### Generate legend
+
+<div style="width:60%">
+
+![](./figures/legend.png)
+
+</div>
 
 Here I create separate grobs for diferent aspects of the legend. These
 are then organised using `_annotation_custom()_`.
@@ -278,6 +313,12 @@ legend <- ggplot()+
 ```
 
 ### Generate summary of flips
+
+<div style="width:50%">
+
+![](./figures/flips.png)
+
+</div>
 
 Since we’re mostly concerned with the “relignment” of Con-Lab voting,
 Conservative gains and Lab gains are also listed separately.
@@ -386,6 +427,12 @@ counts_by_party <- data_plot %>% st_drop_geometry() %>% select(elected, elected_
 ```
 
 ### Generate main graphic : map of swings
+
+<div style="width:60%">
+
+![](./figures/hex_morph.gif)
+
+</div>
 
 The main graphic is generated with `geom_spoke()`, `geom_sf()` – and
 again arranged/laid out with `annotation_custom`.
