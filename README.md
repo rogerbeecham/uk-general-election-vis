@@ -1,4 +1,4 @@
-*Data vis of UK General Election 2019* [DOI](https://zenodo.org/badge/223213895.svg)](https://zenodo.org/badge/latestdoi/223213895)
+*Data vis of UK General Election 2019* 
 ================
 *Roger Beecham*
 04/03/2020
